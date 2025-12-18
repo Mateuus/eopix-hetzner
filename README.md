@@ -4,6 +4,18 @@
 
 Guia completo e executável para deploy em produção na Hetzner Cloud com **Traefik** (SSL automático).
 
+## 🆕 Novidade: Download do Git
+
+Os arquivos de configuração podem ser **baixados diretamente do repositório Git** em vez de copiar via SCP.
+
+Configure no `.env`:
+```bash
+GIT_REPO=https://github.com/Mateuus/eopix-hetzner.git
+GIT_BRANCH=main
+```
+
+Veja mais em: [`BAIXAR_DO_GIT.md`](./BAIXAR_DO_GIT.md)
+
 ## 📋 Arquitetura
 
 ```

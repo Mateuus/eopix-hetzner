@@ -97,10 +97,50 @@ mkdir -p /opt/eopix/db-server/valkey-data
 mkdir -p /opt/eopix/db-server/mysql-config
 
 # ============================================
-# Copiar arquivos de configuração
+# Copiar arquivos de configuração (Git ou SCP)
 # ============================================
-echo -e "${BLUE}📋 Copiando arquivos de configuração...${NC}"
-cp -r /tmp/db-server/* /opt/eopix/db-server/
+echo -e "${BLUE}📋 Obtendo arquivos de configuração...${NC}"
+
+# Verificar se GIT_REPO está definido
+if [ -n "$GIT_REPO" ] && [ -n "$GIT_BRANCH" ]; then
+    echo -e "${BLUE}📥 Clonando repositório Git: ${GIT_REPO} (branch: ${GIT_BRANCH})${NC}"
+    
+    # Clonar ou atualizar repositório
+    GIT_TMP_DIR="/tmp/eopix-hetzner-git"
+    if [ -d "$GIT_TMP_DIR" ]; then
+        cd "$GIT_TMP_DIR"
+        git fetch origin
+        git checkout "$GIT_BRANCH" 2>/dev/null || git checkout -b "$GIT_BRANCH" origin/"$GIT_BRANCH"
+        git pull origin "$GIT_BRANCH" || true
+    else
+        if ! git clone -b "$GIT_BRANCH" "$GIT_REPO" "$GIT_TMP_DIR" 2>/dev/null; then
+            echo -e "${YELLOW}⚠️  Falha ao clonar Git, usando arquivos de /tmp como fallback${NC}"
+            GIT_TMP_DIR=""
+        fi
+    fi
+    
+    # Copiar arquivos do repositório clonado
+    if [ -n "$GIT_TMP_DIR" ] && [ -d "$GIT_TMP_DIR/db-server" ]; then
+        cp -r "$GIT_TMP_DIR/db-server"/* /opt/eopix/db-server/
+        echo -e "${GREEN}✅ Arquivos copiados do repositório Git${NC}"
+    else
+        echo -e "${YELLOW}⚠️  Diretório db-server não encontrado no Git, usando /tmp como fallback${NC}"
+        if [ -d /tmp/db-server ]; then
+            cp -r /tmp/db-server/* /opt/eopix/db-server/
+        else
+            echo -e "${RED}❌ Erro: Arquivos não encontrados nem no Git nem em /tmp${NC}"
+            exit 1
+        fi
+    fi
+else
+    echo -e "${BLUE}📋 Copiando arquivos via SCP (de /tmp)...${NC}"
+    cp -r /tmp/db-server/* /opt/eopix/db-server/ 2>/dev/null || {
+        echo -e "${RED}❌ Erro: Arquivos não encontrados em /tmp/db-server${NC}"
+        echo -e "${YELLOW}💡 Dica: Defina GIT_REPO e GIT_BRANCH no .env para baixar do Git${NC}"
+        exit 1
+    }
+fi
+
 chmod +x /opt/eopix/db-server/*.sh 2>/dev/null || true
 
 # ============================================

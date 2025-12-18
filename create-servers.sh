@@ -640,11 +640,13 @@ cp -r db-server "$TMP_DIR/"
 cp scripts/setup-app-server-traefik.sh "$TMP_DIR/"
 cp scripts/setup-db-server.sh "$TMP_DIR/"
 
-# Criar arquivo com IPs para os scripts
+# Criar arquivo com IPs e configurações Git para os scripts
 cat > "$TMP_DIR/server-ips.env" <<EOF
 APP_SERVER_IP=${APP_SERVER_IP}
 DB_SERVER_IP=${DB_SERVER_IP}
 DB_SERVER_PRIVATE_IP=${DB_SERVER_PRIVATE_IP}
+GIT_REPO=${GIT_REPO:-}
+GIT_BRANCH=${GIT_BRANCH:-main}
 EOF
 
 # Função para executar comandos SSH/SCP com a chave correta
@@ -667,12 +669,18 @@ scp_cmd() {
 # Upload e execução no APP Server
 echo ""
 echo -e "${BLUE}📤 Configurando servidor APP com Traefik...${NC}"
+
+# Sempre fazer upload dos arquivos via SCP (como fallback se Git falhar)
+# Se GIT_REPO estiver definido, o script setup-app-server-traefik.sh vai preferir Git
 scp_cmd -r "$TMP_DIR/app-server" "$TMP_DIR/setup-app-server-traefik.sh" "$TMP_DIR/server-ips.env" root@"${APP_SERVER_IP}":/tmp/
 ssh_cmd root@"${APP_SERVER_IP}" "chmod +x /tmp/setup-app-server-traefik.sh && /tmp/setup-app-server-traefik.sh"
 
 # Upload e execução no DB Server
 echo ""
 echo -e "${BLUE}📤 Configurando servidor DB...${NC}"
+
+# Sempre fazer upload dos arquivos via SCP (como fallback se Git falhar)
+# Se GIT_REPO estiver definido, o script setup-db-server.sh vai preferir Git
 scp_cmd -r "$TMP_DIR/db-server" "$TMP_DIR/setup-db-server.sh" "$TMP_DIR/server-ips.env" root@"${DB_SERVER_IP}":/tmp/
 ssh_cmd root@"${DB_SERVER_IP}" "chmod +x /tmp/setup-db-server.sh && /tmp/setup-db-server.sh"
 
