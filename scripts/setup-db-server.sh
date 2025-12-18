@@ -176,6 +176,90 @@ if [ -f /opt/eopix/db-server/backup.sh ]; then
 fi
 
 # ============================================
+# Iniciar serviços Docker
+# ============================================
+echo -e "${BLUE}🚀 Iniciando serviços Docker...${NC}"
+cd /opt/eopix/db-server
+
+# Verificar se .env existe antes de iniciar
+if [ ! -f .env ]; then
+    echo -e "${YELLOW}⚠️  Arquivo .env não encontrado. Criando a partir do .env.example...${NC}"
+    if [ -f .env.example ]; then
+        cp .env.example .env
+        echo -e "${YELLOW}⚠️  IMPORTANTE: Edite /opt/eopix/db-server/.env com senhas fortes antes de continuar!${NC}"
+        echo -e "${YELLOW}⚠️  Execute: nano /opt/eopix/db-server/.env${NC}"
+        echo -e "${YELLOW}⚠️  Depois execute: /opt/eopix/db-server/scripts/configurar-mysql.sh${NC}"
+        echo ""
+        echo -e "${BLUE}📝 Pulando inicialização automática. Configure o .env primeiro.${NC}"
+    else
+        echo -e "${RED}❌ Arquivo .env.example não encontrado!${NC}"
+        exit 1
+    fi
+else
+    # Carregar variáveis do .env para verificação
+    source .env 2>/dev/null || true
+    
+    # Iniciar serviços
+    echo -e "${BLUE}🐳 Iniciando containers Docker...${NC}"
+    docker-compose up -d
+    
+    echo -e "${GREEN}✅ Serviços iniciados${NC}"
+    
+    # Aguardar MySQL estar pronto
+    echo -e "${BLUE}⏳ Aguardando MySQL inicializar (pode levar 30-60 segundos)...${NC}"
+    sleep 10
+    
+    # Verificar se MySQL está respondendo
+    MAX_WAIT=120
+    WAITED=0
+    MYSQL_READY=0
+    
+    while [ $WAITED -lt $MAX_WAIT ]; do
+        # Tentar com senha do .env se disponível
+        if [ -n "${MYSQL_ROOT_PASSWORD:-}" ]; then
+            if docker exec eopix-mysql mysqladmin ping -h localhost -u root -p"${MYSQL_ROOT_PASSWORD}" --silent 2>/dev/null; then
+                MYSQL_READY=1
+                break
+            fi
+        else
+            # Tentar sem senha (pode funcionar em alguns casos)
+            if docker exec eopix-mysql mysqladmin ping -h localhost -u root --silent 2>/dev/null; then
+                MYSQL_READY=1
+                break
+            fi
+        fi
+        echo -n "."
+        sleep 2
+        WAITED=$((WAITED + 2))
+    done
+    
+    echo "" # Nova linha após os pontos
+    
+    if [ $MYSQL_READY -eq 1 ]; then
+        echo -e "${GREEN}✅ MySQL está pronto!${NC}"
+    else
+        echo -e "${YELLOW}⚠️  MySQL ainda não está respondendo após ${MAX_WAIT} segundos${NC}"
+        echo -e "${YELLOW}💡 Verifique os logs: docker-compose logs mysql${NC}"
+        echo -e "${YELLOW}💡 Você pode tentar configurar manualmente depois${NC}"
+    fi
+    
+    # Configurar MySQL automaticamente (se script existir e MySQL estiver pronto)
+    if [ $MYSQL_READY -eq 1 ] && [ -f /opt/eopix/db-server/scripts/configurar-mysql.sh ]; then
+        echo -e "${BLUE}🔧 Configurando MySQL automaticamente...${NC}"
+        chmod +x /opt/eopix/db-server/scripts/configurar-mysql.sh
+        if /opt/eopix/db-server/scripts/configurar-mysql.sh; then
+            echo -e "${GREEN}✅ MySQL configurado com sucesso!${NC}"
+        else
+            echo -e "${YELLOW}⚠️  Configuração automática falhou, mas você pode executar manualmente depois${NC}"
+            echo -e "${YELLOW}💡 Execute: /opt/eopix/db-server/scripts/configurar-mysql.sh${NC}"
+        fi
+    elif [ ! -f /opt/eopix/db-server/scripts/configurar-mysql.sh ]; then
+        echo -e "${YELLOW}⚠️  Script configurar-mysql.sh não encontrado${NC}"
+        echo -e "${YELLOW}💡 Configure MySQL manualmente se necessário${NC}"
+    fi
+fi
+
+# ============================================
 # Resumo
 # ============================================
 echo ""
@@ -185,24 +269,23 @@ echo -e "${GREEN}═════════════════════
 echo ""
 echo -e "${BLUE}📝 Próximos passos:${NC}"
 echo ""
-echo "  1. Edite as variáveis de ambiente:"
-echo "     nano /opt/eopix/db-server/.env"
-echo ""
-echo "  2. Inicie os serviços:"
-echo "     cd /opt/eopix/db-server"
-echo "     docker-compose up -d"
-echo ""
-echo "  3. Aguarde MySQL inicializar (30-60 segundos)"
-echo ""
-echo "  4. Crie o banco de dados e usuário:"
-echo "     docker-compose exec mysql mysql -uroot -p"
-echo "     # Execute:"
-echo "     # CREATE DATABASE eopix;"
-echo "     # CREATE USER 'eopix'@'%' IDENTIFIED BY 'senha-segura';"
-echo "     # GRANT ALL PRIVILEGES ON eopix.* TO 'eopix'@'%';"
-echo "     # FLUSH PRIVILEGES;"
-echo ""
-echo "  5. Verifique os logs:"
-echo "     docker-compose logs -f"
-echo ""
+if [ ! -f /opt/eopix/db-server/.env ]; then
+    echo "  1. Edite as variáveis de ambiente:"
+    echo "     nano /opt/eopix/db-server/.env"
+    echo ""
+    echo "  2. Configure MySQL:"
+    echo "     /opt/eopix/db-server/scripts/configurar-mysql.sh"
+    echo ""
+else
+    echo "  1. Verifique os serviços:"
+    echo "     cd /opt/eopix/db-server"
+    echo "     docker-compose ps"
+    echo ""
+    echo "  2. Verifique os logs:"
+    echo "     docker-compose logs -f"
+    echo ""
+    echo "  3. (Opcional) Reconfigurar MySQL:"
+    echo "     /opt/eopix/db-server/scripts/configurar-mysql.sh"
+    echo ""
+fi
 echo -e "${GREEN}✨ Setup concluído!${NC}"

@@ -640,6 +640,13 @@ cp -r db-server "$TMP_DIR/"
 cp scripts/setup-app-server-traefik.sh "$TMP_DIR/"
 cp scripts/setup-db-server.sh "$TMP_DIR/"
 
+# Criar diretório scripts no db-server e copiar script de configuração do MySQL
+mkdir -p "$TMP_DIR/db-server/scripts"
+if [ -f scripts/configurar-mysql.sh ]; then
+    cp scripts/configurar-mysql.sh "$TMP_DIR/db-server/scripts/"
+    chmod +x "$TMP_DIR/db-server/scripts/configurar-mysql.sh"
+fi
+
 # Criar arquivo com IPs e configurações Git para os scripts
 cat > "$TMP_DIR/server-ips.env" <<EOF
 APP_SERVER_IP=${APP_SERVER_IP}
