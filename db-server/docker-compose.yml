@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  # ============================================
+  # MySQL 8 - Master
+  # ============================================
+  mysql:
+    image: mysql:8.0
+    container_name: eopix-mysql
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-eopix}
+      MYSQL_USER: ${MYSQL_USER:-eopix}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      TZ: UTC
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./my.cnf:/etc/mysql/conf.d/custom.cnf:ro
+      - ./backups:/backups
+    networks:
+      - eopix-network
+    command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================
+  # Valkey (Redis Compatible)
+  # ============================================
+  valkey:
+    image: valkey/valkey:7.2-alpine
+    container_name: eopix-valkey
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - valkey-data:/data
+    networks:
+      - eopix-network
+    command: valkey-server --appendonly yes --appendfsync everysec
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  eopix-network:
+    driver: bridge
+
+volumes:
+  mysql-data:
+    driver: local
+  valkey-data:
+    driver: local

@@ -1,0 +1,14 @@
+# ============================================
+# Crontab para Backup Automático MySQL
+# ============================================
+# Backup diário às 02:00 UTC
+# ============================================
+
+# Backup MySQL (diário às 02:00 UTC)
+0 2 * * * /opt/eopix/db-server/backup.sh >> /opt/eopix/db-server/backup.log 2>&1
+
+# ============================================
+# Para instalar este crontab:
+# ============================================
+# crontab /opt/eopix/db-server/crontab.example
+# ============================================
