@@ -541,16 +541,14 @@ if [ "$LB_EXISTS" -eq 0 ]; then
     
     echo -e "${GREEN}✅ Load Balancer anexado à rede privada${NC}"
     
-    # Adicionar targets (servidores APP e DB) usando IP privado
-    echo -e "${BLUE}📤 Adicionando targets ao Load Balancer...${NC}"
+    # Adicionar target (apenas servidor APP) usando IP privado
+    # O servidor DB NÃO deve estar no Load Balancer
+    echo -e "${BLUE}📤 Adicionando target (servidor APP) ao Load Balancer...${NC}"
     
     # Adicionar servidor APP
     hcloud load-balancer add-target "${LB_NAME}" --server "${APP_SERVER_NAME}" --use-private-ip
     echo -e "${GREEN}✅ Target (servidor APP) adicionado ao Load Balancer${NC}"
-    
-    # Adicionar servidor DB
-    hcloud load-balancer add-target "${LB_NAME}" --server "${DB_SERVER_NAME}" --use-private-ip
-    echo -e "${GREEN}✅ Target (servidor DB) adicionado ao Load Balancer${NC}"
+    echo -e "${BLUE}ℹ️  Servidor DB não será adicionado ao Load Balancer (não necessário)${NC}"
     
     # Criar serviço HTTP na porta 80
     echo -e "${BLUE}⚙️  Configurando serviço HTTP...${NC}"
@@ -613,17 +611,19 @@ else
         echo -e "${GREEN}✅ Target (servidor APP) já está configurado no Load Balancer${NC}"
     fi
     
-    # Verificar se servidor DB está nos targets
+    # Servidor DB NÃO deve estar no Load Balancer (apenas APP server)
+    # Remover DB do Load Balancer se estiver lá
     DB_TARGET_EXISTS=$(echo "$TARGETS_JSON" | grep -o "\"name\": \"${DB_SERVER_NAME}\"" | wc -l | tr -d ' ')
-    if [ -z "$DB_TARGET_EXISTS" ] || [ "$DB_TARGET_EXISTS" = "0" ]; then
-        echo -e "${BLUE}📤 Adicionando target (servidor DB) ao Load Balancer...${NC}"
-        if hcloud load-balancer add-target "${LB_NAME}" --server "${DB_SERVER_NAME}" --use-private-ip 2>/dev/null; then
-            echo -e "${GREEN}✅ Target (servidor DB) adicionado ao Load Balancer${NC}"
+    if [ -n "$DB_TARGET_EXISTS" ] && [ "$DB_TARGET_EXISTS" != "0" ]; then
+        echo -e "${YELLOW}⚠️  Servidor DB está no Load Balancer, mas não deveria estar. Removendo...${NC}"
+        if hcloud load-balancer remove-target "${LB_NAME}" --server "${DB_SERVER_NAME}" 2>/dev/null; then
+            echo -e "${GREEN}✅ Target (servidor DB) removido do Load Balancer${NC}"
         else
-            echo -e "${RED}❌ Erro ao adicionar target (servidor DB)${NC}"
+            echo -e "${YELLOW}⚠️  Não foi possível remover target (servidor DB) automaticamente${NC}"
+            echo -e "${YELLOW}💡 Remova manualmente via Hetzner Cloud Console se necessário${NC}"
         fi
     else
-        echo -e "${GREEN}✅ Target (servidor DB) já está configurado no Load Balancer${NC}"
+        echo -e "${GREEN}✅ Servidor DB não está no Load Balancer (correto)${NC}"
     fi
 fi
 

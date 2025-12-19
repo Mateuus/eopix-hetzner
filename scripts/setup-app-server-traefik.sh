@@ -199,6 +199,60 @@ chown -R root:root /opt/eopix
 chmod -R 755 /opt/eopix
 
 # ============================================
+# Iniciar serviços Docker (Traefik)
+# ============================================
+echo -e "${BLUE}🚀 Iniciando serviços Docker (Traefik)...${NC}"
+cd /opt/eopix/app-server
+
+# Verificar se .env existe antes de iniciar
+if [ ! -f .env ]; then
+    echo -e "${YELLOW}⚠️  Arquivo .env não encontrado. Criando a partir do .env.example...${NC}"
+    if [ -f .env.example ]; then
+        cp .env.example .env
+        echo -e "${YELLOW}⚠️  IMPORTANTE: Edite /opt/eopix/app-server/.env com suas configurações antes de continuar!${NC}"
+        echo -e "${YELLOW}⚠️  Execute: nano /opt/eopix/app-server/.env${NC}"
+        echo -e "${YELLOW}⚠️  Depois execute: cd /opt/eopix/app-server && docker-compose up -d${NC}"
+    else
+        echo -e "${RED}❌ Arquivo .env.example não encontrado!${NC}"
+        exit 1
+    fi
+else
+    # Iniciar serviços
+    echo -e "${BLUE}🐳 Iniciando containers Docker...${NC}"
+    docker-compose up -d
+    
+    echo -e "${GREEN}✅ Serviços iniciados${NC}"
+    
+    # Aguardar Traefik estar pronto
+    echo -e "${BLUE}⏳ Aguardando Traefik inicializar (pode levar 10-20 segundos)...${NC}"
+    sleep 10
+    
+    # Verificar se Traefik está respondendo
+    MAX_WAIT=60
+    WAITED=0
+    TRAEFIK_READY=0
+    
+    while [ $WAITED -lt $MAX_WAIT ]; do
+        if curl -s http://localhost:8080/ping >/dev/null 2>&1; then
+            TRAEFIK_READY=1
+            break
+        fi
+        echo -n "."
+        sleep 2
+        WAITED=$((WAITED + 2))
+    done
+    
+    echo "" # Nova linha após os pontos
+    
+    if [ $TRAEFIK_READY -eq 1 ]; then
+        echo -e "${GREEN}✅ Traefik está pronto!${NC}"
+    else
+        echo -e "${YELLOW}⚠️  Traefik ainda não está respondendo após ${MAX_WAIT} segundos${NC}"
+        echo -e "${YELLOW}💡 Verifique os logs: docker-compose logs traefik${NC}"
+    fi
+fi
+
+# ============================================
 # Resumo
 # ============================================
 echo ""
@@ -206,24 +260,41 @@ echo -e "${GREEN}═════════════════════
 echo -e "${GREEN}✅ Servidor APP configurado com Traefik!${NC}"
 echo -e "${GREEN}════════════════════════════════════════${NC}"
 echo ""
-echo -e "${BLUE}📝 Próximos passos:${NC}"
-echo ""
-echo "  1. Edite as variáveis de ambiente:"
-echo "     nano /opt/eopix/app-server/.env"
-echo ""
-echo "  2. Inicie os serviços:"
-echo "     cd /opt/eopix/app-server"
-echo "     docker-compose up -d"
-echo ""
-echo "  3. Verifique os logs:"
-echo "     docker-compose logs -f traefik"
-echo ""
-echo "  4. Acesse o dashboard Traefik:"
-echo "     http://<IP_SERVIDOR>:8080"
-echo ""
-echo "  5. Teste o health check:"
-echo "     curl http://localhost/health"
-echo ""
-echo -e "${BLUE}🔒 SSL será configurado automaticamente pelo Traefik!${NC}"
+if [ -f /opt/eopix/app-server/.env ]; then
+    echo -e "${BLUE}📋 Status dos serviços:${NC}"
+    echo ""
+    echo "  # Verificar status"
+    echo "  cd /opt/eopix/app-server"
+    echo "  docker-compose ps"
+    echo ""
+    echo "  # Ver logs"
+    echo "  docker-compose logs -f traefik"
+    echo ""
+    echo -e "${BLUE}🌐 Acesse o dashboard Traefik:${NC}"
+    echo ""
+    echo "  # Via IP do servidor (porta 8080):"
+    echo "  http://$(hostname -I | awk '{print $1}'):8080"
+    echo ""
+    echo "  # Ou via domínio (após configurar DNS):"
+    echo "  https://traefik.${DOMAIN:-api-prod.eopix.me}"
+    echo ""
+    echo "  # Teste o health check:"
+    echo "  curl http://localhost/health"
+    echo ""
+    echo -e "${BLUE}🔒 SSL será configurado automaticamente pelo Traefik!${NC}"
+else
+    echo -e "${BLUE}📝 Próximos passos:${NC}"
+    echo ""
+    echo "  1. Edite as variáveis de ambiente:"
+    echo "     nano /opt/eopix/app-server/.env"
+    echo ""
+    echo "  2. Inicie os serviços:"
+    echo "     cd /opt/eopix/app-server"
+    echo "     docker-compose up -d"
+    echo ""
+    echo "  3. Acesse o dashboard Traefik:"
+    echo "     http://$(hostname -I | awk '{print $1}'):8080"
+    echo ""
+fi
 echo ""
 echo -e "${GREEN}✨ Setup concluído!${NC}"
