@@ -98,7 +98,7 @@ backend1:
     context: /opt/eopix-backend
     dockerfile: Dockerfile
     target: production
-  # Remover a linha: image: ${BACKEND_IMAGE:-eopix_backend-backend:latest}
+  # Remover a linha: image: ${BACKEND_IMAGE:-mateuus27/eopix-backend:latest}
 ```
 
 ## 🚀 Script Automatizado

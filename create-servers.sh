@@ -635,8 +635,29 @@ echo -e "${BLUE}🚀 Executando setup remoto nos servidores...${NC}"
 
 # Preparar arquivos para upload
 TMP_DIR=$(mktemp -d)
-cp -r app-server "$TMP_DIR/"
-cp -r db-server "$TMP_DIR/"
+
+# Copiar app-server (usar tar para preservar arquivos ocultos)
+mkdir -p "$TMP_DIR/app-server"
+(cd app-server && tar cf - .) | (cd "$TMP_DIR/app-server" && tar xf -) 2>/dev/null || {
+    # Fallback: copiar manualmente arquivos importantes
+    cp -r app-server/* "$TMP_DIR/app-server/" 2>/dev/null || true
+    # Garantir que .env.example seja copiado explicitamente
+    if [ -f app-server/.env.example ]; then
+        cp app-server/.env.example "$TMP_DIR/app-server/.env.example"
+    fi
+}
+
+# Copiar db-server (usar tar para preservar arquivos ocultos)
+mkdir -p "$TMP_DIR/db-server"
+(cd db-server && tar cf - .) | (cd "$TMP_DIR/db-server" && tar xf -) 2>/dev/null || {
+    # Fallback: copiar manualmente arquivos importantes
+    cp -r db-server/* "$TMP_DIR/db-server/" 2>/dev/null || true
+    # Garantir que .env.example seja copiado explicitamente
+    if [ -f db-server/.env.example ]; then
+        cp db-server/.env.example "$TMP_DIR/db-server/.env.example"
+    fi
+}
+
 cp scripts/setup-app-server-traefik.sh "$TMP_DIR/"
 cp scripts/setup-db-server.sh "$TMP_DIR/"
 

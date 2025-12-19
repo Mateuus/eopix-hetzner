@@ -68,12 +68,35 @@ fi
 # ============================================
 # Instalar Docker Compose (standalone)
 # ============================================
-if ! command -v docker-compose &> /dev/null; then
+# Verificar se docker compose (plugin) está disponível
+if docker compose version &> /dev/null; then
+    echo -e "${GREEN}✅ Docker Compose (plugin) já está instalado${NC}"
+    DOCKER_COMPOSE_CMD="docker compose"
+elif command -v docker-compose &> /dev/null; then
+    echo -e "${GREEN}✅ Docker Compose (standalone) já está instalado${NC}"
+    DOCKER_COMPOSE_CMD="docker-compose"
+else
     echo -e "${BLUE}📦 Instalando Docker Compose...${NC}"
-    curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+    DOCKER_COMPOSE_VERSION=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep 'tag_name' | cut -d\" -f4)
+    curl -L "https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
     chmod +x /usr/local/bin/docker-compose
     echo -e "${GREEN}✅ Docker Compose instalado${NC}"
+    DOCKER_COMPOSE_CMD="docker-compose"
 fi
+
+# Função para executar docker compose (compatível com ambas versões)
+docker_compose() {
+    if [ -n "$DOCKER_COMPOSE_CMD" ]; then
+        $DOCKER_COMPOSE_CMD "$@"
+    elif docker compose version &> /dev/null; then
+        docker compose "$@"
+    elif command -v docker-compose &> /dev/null; then
+        docker-compose "$@"
+    else
+        echo -e "${RED}❌ Docker Compose não encontrado!${NC}"
+        exit 1
+    fi
+}
 
 # ============================================
 # Configurar Firewall UFW
@@ -201,7 +224,7 @@ else
     
     # Iniciar serviços
     echo -e "${BLUE}🐳 Iniciando containers Docker...${NC}"
-    docker-compose up -d
+    docker_compose up -d
     
     echo -e "${GREEN}✅ Serviços iniciados${NC}"
     
@@ -279,10 +302,10 @@ if [ ! -f /opt/eopix/db-server/.env ]; then
 else
     echo "  1. Verifique os serviços:"
     echo "     cd /opt/eopix/db-server"
-    echo "     docker-compose ps"
+    echo "     docker compose ps"
     echo ""
     echo "  2. Verifique os logs:"
-    echo "     docker-compose logs -f"
+    echo "     docker compose logs -f"
     echo ""
     echo "  3. (Opcional) Reconfigurar MySQL:"
     echo "     /opt/eopix/db-server/scripts/configurar-mysql.sh"

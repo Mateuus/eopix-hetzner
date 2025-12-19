@@ -68,15 +68,35 @@ fi
 # ============================================
 # Instalar Docker Compose (standalone)
 # ============================================
-if ! command -v docker-compose &> /dev/null && ! docker compose version &> /dev/null; then
+# Verificar se docker compose (plugin) está disponível
+if docker compose version &> /dev/null; then
+    echo -e "${GREEN}✅ Docker Compose (plugin) já está instalado${NC}"
+    DOCKER_COMPOSE_CMD="docker compose"
+elif command -v docker-compose &> /dev/null; then
+    echo -e "${GREEN}✅ Docker Compose (standalone) já está instalado${NC}"
+    DOCKER_COMPOSE_CMD="docker-compose"
+else
     echo -e "${BLUE}📦 Instalando Docker Compose...${NC}"
     DOCKER_COMPOSE_VERSION=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep 'tag_name' | cut -d\" -f4)
     curl -L "https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
     chmod +x /usr/local/bin/docker-compose
     echo -e "${GREEN}✅ Docker Compose instalado${NC}"
-else
-    echo -e "${GREEN}✅ Docker Compose já está instalado${NC}"
+    DOCKER_COMPOSE_CMD="docker-compose"
 fi
+
+# Função para executar docker compose (compatível com ambas versões)
+docker_compose() {
+    if [ -n "$DOCKER_COMPOSE_CMD" ]; then
+        $DOCKER_COMPOSE_CMD "$@"
+    elif docker compose version &> /dev/null; then
+        docker compose "$@"
+    elif command -v docker-compose &> /dev/null; then
+        docker-compose "$@"
+    else
+        echo -e "${RED}❌ Docker Compose não encontrado!${NC}"
+        exit 1
+    fi
+}
 
 # ============================================
 # Configurar Firewall (UFW)
@@ -165,23 +185,64 @@ fi
 # Configurar .env do backend
 # ============================================
 echo -e "${BLUE}⚙️  Configurando variáveis de ambiente...${NC}"
-if [ -f /opt/eopix/app-server/.env.example ]; then
-    if [ ! -f /opt/eopix/app-server/.env ]; then
+
+# Criar .env se não existir
+if [ ! -f /opt/eopix/app-server/.env ]; then
+    if [ -f /opt/eopix/app-server/.env.example ]; then
         cp /opt/eopix/app-server/.env.example /opt/eopix/app-server/.env
-        
-        # Atualizar IPs se disponíveis
-        if [ -n "$DB_SERVER_PRIVATE_IP" ]; then
-            sed -i "s/DB_HOST=.*/DB_HOST=${DB_SERVER_PRIVATE_IP}/" /opt/eopix/app-server/.env
-            sed -i "s/REDIS_HOST=.*/REDIS_HOST=${DB_SERVER_PRIVATE_IP}/" /opt/eopix/app-server/.env
-        fi
-        
-        # Adicionar DOMAIN se não existir
-        if ! grep -q "^DOMAIN=" /opt/eopix/app-server/.env; then
-            echo "DOMAIN=api-prod.eopix.me" >> /opt/eopix/app-server/.env
-        fi
-        
-        echo -e "${YELLOW}⚠️  IMPORTANTE: Edite /opt/eopix/app-server/.env com suas configurações antes de iniciar!${NC}"
+        echo -e "${GREEN}✅ Arquivo .env criado a partir do .env.example${NC}"
+    else
+        # Criar .env básico se .env.example não existir
+        echo -e "${YELLOW}⚠️  Arquivo .env.example não encontrado. Criando .env básico...${NC}"
+        cat > /opt/eopix/app-server/.env <<EOF
+# EoPix Backend - Environment Variables
+BACKEND_IMAGE=mateuus27/eopix-backend:latest
+DOMAIN=api-prod.eopix.me
+NODE_ENV=production
+PORT=4000
+SESSION_SECRET=change-me-minimum-32-characters-long-secret-key
+COOKIE_DOMAIN=.eopix.me
+DB_HOST=${DB_SERVER_PRIVATE_IP:-10.0.0.2}
+DB_PORT=3306
+DB_USER=eopix
+DB_PASS=change-me-strong-password
+DB_NAME=eopix
+REDIS_HOST=${DB_SERVER_PRIVATE_IP:-10.0.0.2}
+REDIS_PORT=6379
+VALKEY_NAMESPACE=eopix
+CORS_ENABLED=true
+CORS_ORIGIN=https://eopix.me
+CORS_ORIGINS=https://eopix.me,https://www.eopix.me
+CORS_ALLOW_CREDENTIALS=true
+R2_ACCOUNT_ID=your-r2-account-id
+R2_ACCESS_KEY_ID=your-r2-access-key
+R2_SECRET_ACCESS_KEY=your-r2-secret-key
+R2_BUCKET_NAME=your-bucket-name
+R2_PUBLIC_URL=https://your-r2-public-url.com
+APP_URL=https://eopix.me
+API_BASE_URL=https://api-prod.eopix.me
+FRONTEND_URL=https://eopix.me
+EOF
+        echo -e "${GREEN}✅ Arquivo .env básico criado${NC}"
     fi
+fi
+
+# Atualizar IPs se disponíveis (mesmo se .env já existir)
+if [ -n "$DB_SERVER_PRIVATE_IP" ]; then
+    if [ -f /opt/eopix/app-server/.env ]; then
+        sed -i "s/DB_HOST=.*/DB_HOST=${DB_SERVER_PRIVATE_IP}/" /opt/eopix/app-server/.env
+        sed -i "s/REDIS_HOST=.*/REDIS_HOST=${DB_SERVER_PRIVATE_IP}/" /opt/eopix/app-server/.env
+        echo -e "${GREEN}✅ IPs do servidor DB atualizados no .env${NC}"
+    fi
+fi
+
+# Adicionar DOMAIN se não existir
+if [ -f /opt/eopix/app-server/.env ] && ! grep -q "^DOMAIN=" /opt/eopix/app-server/.env; then
+    echo "DOMAIN=api-prod.eopix.me" >> /opt/eopix/app-server/.env
+fi
+
+if [ -f /opt/eopix/app-server/.env ]; then
+    echo -e "${YELLOW}⚠️  IMPORTANTE: Edite /opt/eopix/app-server/.env com suas configurações antes de iniciar!${NC}"
 fi
 
 # ============================================
@@ -206,20 +267,84 @@ cd /opt/eopix/app-server
 
 # Verificar se .env existe antes de iniciar
 if [ ! -f .env ]; then
-    echo -e "${YELLOW}⚠️  Arquivo .env não encontrado. Criando a partir do .env.example...${NC}"
+    echo -e "${YELLOW}⚠️  Arquivo .env não encontrado. Criando...${NC}"
+    
+    # Tentar criar a partir do .env.example
     if [ -f .env.example ]; then
         cp .env.example .env
-        echo -e "${YELLOW}⚠️  IMPORTANTE: Edite /opt/eopix/app-server/.env com suas configurações antes de continuar!${NC}"
-        echo -e "${YELLOW}⚠️  Execute: nano /opt/eopix/app-server/.env${NC}"
-        echo -e "${YELLOW}⚠️  Depois execute: cd /opt/eopix/app-server && docker-compose up -d${NC}"
+        echo -e "${GREEN}✅ Arquivo .env criado a partir do .env.example${NC}"
     else
-        echo -e "${RED}❌ Arquivo .env.example não encontrado!${NC}"
-        exit 1
+        # Se .env.example não existir, criar um .env básico
+        echo -e "${YELLOW}⚠️  Arquivo .env.example não encontrado. Criando .env básico...${NC}"
+        cat > .env <<EOF
+# EoPix Backend - Environment Variables
+# Edite este arquivo com suas configurações antes de iniciar!
+
+BACKEND_IMAGE=mateuus27/eopix-backend:latest
+
+# Domain
+DOMAIN=api-prod.eopix.me
+
+# Node.js
+NODE_ENV=production
+PORT=4000
+SESSION_SECRET=change-me-minimum-32-characters-long-secret-key
+COOKIE_DOMAIN=.eopix.me
+
+# Database
+DB_HOST=${DB_SERVER_PRIVATE_IP:-10.0.0.2}
+DB_PORT=3306
+DB_USER=eopix
+DB_PASS=change-me-strong-password
+DB_NAME=eopix
+
+# Redis/Valkey
+REDIS_HOST=${DB_SERVER_PRIVATE_IP:-10.0.0.2}
+REDIS_PORT=6379
+VALKEY_NAMESPACE=eopix
+
+# CORS
+CORS_ENABLED=true
+CORS_ORIGIN=https://eopix.me
+CORS_ORIGINS=https://eopix.me,https://www.eopix.me
+CORS_ALLOW_CREDENTIALS=true
+
+# R2 Storage (Cloudflare)
+R2_ACCOUNT_ID=your-r2-account-id
+R2_ACCESS_KEY_ID=your-r2-access-key
+R2_SECRET_ACCESS_KEY=your-r2-secret-key
+R2_BUCKET_NAME=your-bucket-name
+R2_PUBLIC_URL=https://your-r2-public-url.com
+
+# URLs
+APP_URL=https://eopix.me
+API_BASE_URL=https://api-prod.eopix.me
+FRONTEND_URL=https://eopix.me
+EOF
+        echo -e "${GREEN}✅ Arquivo .env básico criado${NC}"
     fi
+    
+    # Atualizar IPs se disponíveis
+    if [ -n "$DB_SERVER_PRIVATE_IP" ]; then
+        sed -i "s/DB_HOST=.*/DB_HOST=${DB_SERVER_PRIVATE_IP}/" .env
+        sed -i "s/REDIS_HOST=.*/REDIS_HOST=${DB_SERVER_PRIVATE_IP}/" .env
+        echo -e "${GREEN}✅ IPs do servidor DB atualizados no .env${NC}"
+    fi
+    
+    # Adicionar DOMAIN se não existir
+    if ! grep -q "^DOMAIN=" .env; then
+        echo "DOMAIN=api-prod.eopix.me" >> .env
+    fi
+    
+    echo -e "${YELLOW}⚠️  IMPORTANTE: Edite /opt/eopix/app-server/.env com suas configurações antes de continuar!${NC}"
+    echo -e "${YELLOW}⚠️  Execute: nano /opt/eopix/app-server/.env${NC}"
+    echo -e "${YELLOW}⚠️  Depois execute: cd /opt/eopix/app-server && docker compose up -d${NC}"
+    echo ""
+    echo -e "${BLUE}📝 Pulando inicialização automática. Configure o .env primeiro.${NC}"
 else
     # Iniciar serviços
     echo -e "${BLUE}🐳 Iniciando containers Docker...${NC}"
-    docker-compose up -d
+    docker_compose up -d
     
     echo -e "${GREEN}✅ Serviços iniciados${NC}"
     
@@ -248,7 +373,7 @@ else
         echo -e "${GREEN}✅ Traefik está pronto!${NC}"
     else
         echo -e "${YELLOW}⚠️  Traefik ainda não está respondendo após ${MAX_WAIT} segundos${NC}"
-        echo -e "${YELLOW}💡 Verifique os logs: docker-compose logs traefik${NC}"
+        echo -e "${YELLOW}💡 Verifique os logs: docker compose logs traefik${NC}"
     fi
 fi
 
@@ -265,10 +390,10 @@ if [ -f /opt/eopix/app-server/.env ]; then
     echo ""
     echo "  # Verificar status"
     echo "  cd /opt/eopix/app-server"
-    echo "  docker-compose ps"
+    echo "  docker compose ps"
     echo ""
     echo "  # Ver logs"
-    echo "  docker-compose logs -f traefik"
+    echo "  docker compose logs -f traefik"
     echo ""
     echo -e "${BLUE}🌐 Acesse o dashboard Traefik:${NC}"
     echo ""
@@ -290,7 +415,7 @@ else
     echo ""
     echo "  2. Inicie os serviços:"
     echo "     cd /opt/eopix/app-server"
-    echo "     docker-compose up -d"
+    echo "     docker compose up -d"
     echo ""
     echo "  3. Acesse o dashboard Traefik:"
     echo "     http://$(hostname -I | awk '{print $1}'):8080"

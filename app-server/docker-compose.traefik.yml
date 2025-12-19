@@ -61,7 +61,7 @@ services:
   # Backend 1
   # ============================================
   backend1:
-    image: ${BACKEND_IMAGE:-eopix_backend-backend:latest}
+    image: ${BACKEND_IMAGE:-mateuus27/eopix-backend:latest}
     container_name: eopix-backend-1
     restart: unless-stopped
     env_file:
@@ -93,7 +93,7 @@ services:
   # Backend 2
   # ============================================
   backend2:
-    image: ${BACKEND_IMAGE:-eopix_backend-backend:latest}
+    image: ${BACKEND_IMAGE:-mateuus27/eopix-backend:latest}
     container_name: eopix-backend-2
     restart: unless-stopped
     env_file:
@@ -125,7 +125,7 @@ services:
   # Backend 3
   # ============================================
   backend3:
-    image: ${BACKEND_IMAGE:-eopix_backend-backend:latest}
+    image: ${BACKEND_IMAGE:-mateuus27/eopix-backend:latest}
     container_name: eopix-backend-3
     restart: unless-stopped
     env_file:
