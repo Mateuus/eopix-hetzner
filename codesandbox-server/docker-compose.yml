@@ -1,0 +1,81 @@
+# ============================================
+# Docker Compose - CodeSandbox Server
+# ============================================
+# CodeSandbox/Sandpack server com Traefik
+# Domínio: sandpack.eopix.me
+# ============================================
+
+services:
+  # ============================================
+  # CodeSandbox App - Production
+  # ============================================
+  codesandbox-app:
+    # Usar imagem do Docker Hub (recomendado para produção)
+    image: mateuus27/codesandbox-app:prod
+    # Alternativa: usar imagem local (descomente e comente a linha acima)
+    # image: codesandbox-app:prod
+    # Alternativa: usar build direto (descomente e comente as linhas acima)
+    # build:
+    #   context: ../../codesandbox-client
+    #   dockerfile: docker/Dockerfile.prod
+    container_name: codesandbox-app
+    restart: unless-stopped
+    
+    # Porta interna do container (nginx expõe na porta 80)
+    # Expor porta 8080 no host para acesso direto (opcional)
+    ports:
+      - "8080:80"
+    
+    # Labels do Traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.codesandbox.rule=Host(`sandpack.eopix.me`)"
+      - "traefik.http.routers.codesandbox.entrypoints=websecure"
+      - "traefik.http.routers.codesandbox.tls.certresolver=le"
+      - "traefik.http.routers.codesandbox.tls=true"
+      - "traefik.http.services.codesandbox.loadbalancer.server.port=80"
+      - "traefik.http.services.codesandbox.loadbalancer.passHostHeader=true"
+      - "traefik.http.services.codesandbox.loadbalancer.server.scheme=http"
+      - "traefik.http.routers.codesandbox.service=codesandbox"
+      
+      # Headers para SPA (Single Page Application)
+      - "traefik.http.middlewares.codesandbox-headers.headers.customRequestHeaders.X-Forwarded-Proto=https"
+      - "traefik.http.routers.codesandbox.middlewares=codesandbox-headers"
+    
+    networks:
+      - web
+    
+    # Health check (nginx responde na porta 80)
+    # Usando curl ao invés de wget (mais comum em containers)
+    # curl -f retorna código de erro se HTTP status não for 2xx
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # Limites de recursos
+    # Nota: deploy.resources só funciona no Docker Swarm
+    # Para docker-compose standalone, use docker run com --cpus e --memory
+    # ou configure via systemd/docker daemon
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+
+# ============================================
+# Networks
+# ============================================
+networks:
+  web:
+    external: true
+

@@ -1,0 +1,99 @@
+# ============================================
+# Docker Compose - EoPix Backend (PRODUÇÃO)
+# ============================================
+# Para produção com otimizações e segurança
+# MySQL e Redis devem ser configurados externamente
+# Traefik como reverse proxy
+# ============================================
+
+services:
+  # ============================================
+  # EoPix Backend - Production
+  # ============================================
+  backend:
+    # Usar imagem do Docker Hub
+    image: mateuus27/eopix-backend:latest
+    # Alternativa: usar build local (descomente e comente a linha acima)
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+    #   target: production
+    
+    # container_name removido para permitir scale (múltiplas instâncias)
+    # Se precisar de nome fixo, use apenas para instância única
+    # container_name: eopix-backend-prod
+    restart: unless-stopped
+    
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+    
+    volumes:
+      # Apenas volumes necessários (read-only para certs)
+      - ./certs:/app/certs:ro
+      - ./logs:/app/logs
+    
+    # Labels do Traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.eopix.rule=Host(`api-prod.eopix.me`)"
+      - "traefik.http.routers.eopix.entrypoints=websecure"
+      - "traefik.http.routers.eopix.tls.certresolver=le"
+      - "traefik.http.routers.eopix.tls=true"
+      - "traefik.http.services.eopix.loadbalancer.server.port=4000"
+      - "traefik.http.services.eopix.loadbalancer.passHostHeader=true"
+      - "traefik.http.services.eopix.loadbalancer.server.scheme=http"
+      # Sticky Sessions para WebSockets (mantém conexão na mesma instância)
+      # IMPORTANTE: Necessário para WebSockets funcionarem corretamente com múltiplas instâncias
+      # Se não usar sticky sessions, clientes WebSocket podem perder conexão ao mudar de instância
+      - "traefik.http.services.eopix.loadbalancer.sticky.cookie=true"
+      - "traefik.http.services.eopix.loadbalancer.sticky.cookie.name=backend_session"
+      - "traefik.http.services.eopix.loadbalancer.sticky.cookie.secure=true"
+      - "traefik.http.services.eopix.loadbalancer.sticky.cookie.httpOnly=true"
+      # Health check desabilitado temporariamente (estava causando "context deadline exceeded")
+      # Se necessário, reative com timeout maior:
+      # - "traefik.http.services.eopix.loadbalancer.healthCheck.path=/health"
+      # - "traefik.http.services.eopix.loadbalancer.healthCheck.interval=60s"
+      # - "traefik.http.services.eopix.loadbalancer.healthCheck.timeout=30s"
+      # Middleware opcional (rate limiting, auth, etc)
+      # - "traefik.http.routers.eopix.middlewares=rate-limit@docker"
+    
+    networks:
+      - web
+    
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:4000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Limites de recursos (Docker Compose standalone)
+    # Nota: deploy.resources.reservations só funciona no Docker Swarm
+    # Para limites em Docker Compose standalone, use docker run com --cpus e --memory
+    # ou configure via systemd/docker daemon
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # Para acessar serviços externos, use host.docker.internal (Linux/Mac)
+    # ou o IP do host. No Linux, pode ser necessário usar network_mode: host
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+# ============================================
+# Networks
+# ============================================
+networks:
+  web:
+    external: true
