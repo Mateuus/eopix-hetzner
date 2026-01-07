@@ -1,0 +1,67 @@
+services:
+  traefik:
+    image: traefik:v3.6.5
+    container_name: traefik
+
+    command:
+      # Dashboard/API
+      - "--api.dashboard=true"
+      - "--api.insecure=false"
+
+      # Docker provider
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.endpoint=unix:///var/run/docker.sock"
+
+      # Entrypoints
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+
+      # Redirecionar HTTP -> HTTPS
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+
+      # Let's Encrypt (HTTP challenge)
+      - "--certificatesresolvers.le.acme.httpchallenge=true"
+      - "--certificatesresolvers.le.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.le.acme.email=suporte@eopix.gg"
+      - "--certificatesresolvers.le.acme.storage=/letsencrypt/acme.json"
+
+      # Logs
+      - "--log.level=INFO"
+
+    ports:
+      - "80:80"
+      - "443:443"
+      
+    networks:
+      - web
+
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "./letsencrypt:/letsencrypt"
+
+    labels:
+      - "traefik.enable=true"
+
+      # Router do Dashboard
+      - "traefik.http.routers.traefik.rule=Host(`traefik.eopix.gg`)"
+      - "traefik.http.routers.traefik.entrypoints=websecure"
+      - "traefik.http.routers.traefik.tls.certresolver=le"
+
+      # Service interno do Traefik (dashboard/API)
+      - "traefik.http.routers.traefik.service=api@internal"
+
+      # Middleware BasicAuth (ATENÇÃO: use $$ no lugar de $)
+      # Exemplo abaixo é só placeholder. Substitua pela sua linha.
+      - "traefik.http.routers.traefik.middlewares=traefik-auth"
+      - "traefik.http.middlewares.traefik-auth.basicauth.users=admin:$$2y$$05$$I1vgHhXkylLQHTJVgBrm1.8RU6W.orRv1ULa.1lG3yk4lI85RCzNi"
+
+    restart: unless-stopped
+
+# ============================================
+# Networks
+# ============================================
+networks:
+  web:
+    external: true    

@@ -29,7 +29,7 @@ services:
     # Labels do Traefik
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.codesandbox.rule=Host(`sandpack.eopix.me`)"
+      - "traefik.http.routers.codesandbox.rule=Host(`sandpack.eopix.gg`)"
       - "traefik.http.routers.codesandbox.entrypoints=websecure"
       - "traefik.http.routers.codesandbox.tls.certresolver=le"
       - "traefik.http.routers.codesandbox.tls=true"

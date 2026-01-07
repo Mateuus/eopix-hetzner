@@ -37,7 +37,7 @@ services:
     # Labels do Traefik
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.eopix.rule=Host(`api-prod.eopix.me`)"
+      - "traefik.http.routers.eopix.rule=Host(`api.eopix.gg`)"
       - "traefik.http.routers.eopix.entrypoints=websecure"
       - "traefik.http.routers.eopix.tls.certresolver=le"
       - "traefik.http.routers.eopix.tls=true"
